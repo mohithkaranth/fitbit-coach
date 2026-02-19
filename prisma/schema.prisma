@@ -10,3 +10,41 @@ model HealthCheck {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
 }
+
+model FitbitAuth {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  fitbitUserId String
+  scope        String
+  accessToken  String
+  refreshToken String
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model FitbitWorkout {
+  id           String   @id @default(cuid())
+  userId       String
+  fitbitLogId  String   @unique
+  startTime    DateTime
+  durationMs   Int
+  activityName String
+  calories     Float?
+  steps        Int?
+  distance     Float?
+  rawJson      Json
+  createdAt    DateTime @default(now())
+}
+
+model FitbitDaily {
+  id            String   @id @default(cuid())
+  userId        String
+  date          DateTime
+  steps         Int?
+  activeMinutes Int?
+  rawJson       Json
+  createdAt     DateTime @default(now())
+
+  @@unique([userId, date])
+}
