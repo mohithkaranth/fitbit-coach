@@ -31,6 +31,8 @@ model FitbitWorkout {
   startTime    DateTime
   durationMs   Int
   activityName String
+  category     String?
+  isTraining   Boolean?
   calories     Float?
   steps        Int?
   distance     Float?

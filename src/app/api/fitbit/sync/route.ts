@@ -5,6 +5,7 @@ import {
   listFitbitActivitiesPage,
   refreshFitbitToken,
 } from "@/lib/fitbit";
+import { classifyWorkout } from "@/lib/classifyWorkout";
 import { getAuth, touchAuth, upsertAuth, upsertWorkout } from "@/lib/store";
 
 export const runtime = "nodejs";
@@ -117,12 +118,17 @@ async function syncActivities(accessToken: string) {
       const duration = activity.duration;
       const activityName = activity.activityName;
 
+      const parsedActivityName = typeof activityName === "string" ? activityName : "Workout";
+      const classification = classifyWorkout(parsedActivityName);
+
       await upsertWorkout({
         userId: FITBIT_USER_ID,
         fitbitLogId: String(logId),
         startTime: parseActivityDate(activity).toISOString(),
         durationMs: typeof duration === "number" ? duration : 0,
-        activityName: typeof activityName === "string" ? activityName : "Workout",
+        activityName: parsedActivityName,
+        category: classification.category,
+        isTraining: classification.isTraining,
         calories: typeof activity.calories === "number" ? activity.calories : null,
         steps: typeof activity.steps === "number" ? activity.steps : null,
         distance: parseDistance(activity),
