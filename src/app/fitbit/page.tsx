@@ -3,12 +3,13 @@ export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { DevSyncButton } from "@/components/dev-sync-button";
 import { FITBIT_USER_ID } from "@/lib/fitbit";
-import { getAuth, getLatestWorkoutCreatedAt, getWorkoutCount } from "@/lib/store";
+import { getAuth, getLatestWorkoutCreatedAt, getWorkoutCategoryCounts, getWorkoutCount } from "@/lib/store";
 
 export default async function FitbitPage() {
-  const [auth, workoutCount, latestWorkout] = await Promise.all([
+  const [auth, workoutCount, workoutCategoryCounts, latestWorkout] = await Promise.all([
     getAuth(),
     getWorkoutCount(FITBIT_USER_ID),
+    getWorkoutCategoryCounts(FITBIT_USER_ID),
     getLatestWorkoutCreatedAt(FITBIT_USER_ID),
   ]);
 
@@ -45,6 +46,17 @@ export default async function FitbitPage() {
             <p className="mt-2 text-lg font-semibold text-slate-900">
               {lastSync ? new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(lastSync) : "Never"}
             </p>
+          </div>
+        </section>
+
+
+        <section className="rounded-3xl border border-sky-100 bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-slate-900">Workout categories</h2>
+          <div className="mt-3 grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
+            <p>Strength workouts: <span className="font-semibold text-slate-900">{workoutCategoryCounts.strength}</span></p>
+            <p>Cardio workouts: <span className="font-semibold text-slate-900">{workoutCategoryCounts.cardio}</span></p>
+            <p>Walks (ignored): <span className="font-semibold text-slate-900">{workoutCategoryCounts.walk}</span></p>
+            <p>Other: <span className="font-semibold text-slate-900">{workoutCategoryCounts.other}</span></p>
           </div>
         </section>
 

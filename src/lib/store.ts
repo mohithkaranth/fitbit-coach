@@ -1,5 +1,6 @@
 import { Prisma } from "@/generated/prisma";
 import { prisma } from "@/lib/prisma";
+import { WorkoutCategory } from "@/lib/classifyWorkout";
 
 export type StoredFitbitAuth = {
   userId: string;
@@ -18,6 +19,8 @@ export type StoredWorkout = {
   startTime: string;
   durationMs: number;
   activityName: string;
+  category: WorkoutCategory;
+  isTraining: boolean;
   calories: number | null;
   steps: number | null;
   distance: number | null;
@@ -114,6 +117,8 @@ export async function upsertWorkout(input: StoredWorkout) {
       startTime: new Date(input.startTime),
       durationMs: input.durationMs,
       activityName: input.activityName,
+      category: input.category,
+      isTraining: input.isTraining,
       calories: input.calories,
       steps: input.steps,
       distance: input.distance,
@@ -125,6 +130,8 @@ export async function upsertWorkout(input: StoredWorkout) {
       startTime: new Date(input.startTime),
       durationMs: input.durationMs,
       activityName: input.activityName,
+      category: input.category,
+      isTraining: input.isTraining,
       calories: input.calories,
       steps: input.steps,
       distance: input.distance,
@@ -138,6 +145,31 @@ export async function getWorkoutCount(userId: string) {
   return prisma.fitbitWorkout.count({
     where: { userId },
   });
+}
+
+export async function getWorkoutCategoryCounts(userId: string): Promise<
+  Record<WorkoutCategory, number>
+> {
+  const grouped = await prisma.fitbitWorkout.groupBy({
+    by: ["category"],
+    where: { userId },
+    _count: { _all: true },
+  });
+
+  const counts: Record<WorkoutCategory, number> = {
+    strength: 0,
+    cardio: 0,
+    walk: 0,
+    other: 0,
+  };
+
+  for (const item of grouped) {
+    if (item.category === "strength" || item.category === "cardio" || item.category === "walk" || item.category === "other") {
+      counts[item.category] = item._count._all;
+    }
+  }
+
+  return counts;
 }
 
 export async function getLatestWorkoutCreatedAt(userId: string) {
