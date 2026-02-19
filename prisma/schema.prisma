@@ -65,3 +65,9 @@ model Reminder {
   @@index([subjectKey])
   @@unique([subjectKey, kind, dayKey])
 }
+model FitbitSyncState {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  lastSyncedAt DateTime?
+  updatedAt   DateTime @updatedAt
+}
