@@ -2,12 +2,13 @@
   "name": "fitbit-coach",
   "version": "0.1.0",
   "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "prisma generate && next build",
-    "start": "next start",
-    "lint": "eslint",
-    "postinstall": "prisma generate"
+ "scripts": {
+  "dev": "next dev",
+  "build": "prisma migrate deploy && prisma generate && next build",
+  "start": "next start",
+  "lint": "eslint",
+  "postinstall": "prisma generate"
+}
   },
   "dependencies": {
     "next": "16.1.6",
