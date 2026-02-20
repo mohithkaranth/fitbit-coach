@@ -125,7 +125,7 @@ export default async function FitbitPage() {
           <h2 className="text-lg font-semibold text-slate-900">Actions</h2>
           <p className="mt-1 text-sm text-slate-600">
             {connected
-              ? "Auto-sync runs daily at 7:00am. We refresh only when data is stale."
+              ? "Auto-sync runs multiple times daily."
               : "Authorize Fitbit to connect your account and enable daily sync."}
           </p>
           <div className="mt-4 flex flex-wrap gap-3">
