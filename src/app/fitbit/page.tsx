@@ -54,6 +54,12 @@ export default async function FitbitPage() {
             Connect Fitbit, sync workouts into your coach database, and keep
             activity data fresh.
           </p>
+          <Link
+            href="/"
+            className="inline-flex text-sm font-medium text-sky-700 transition hover:text-sky-800"
+          >
+            ← Back to Home
+          </Link>
         </header>
 
         <section className="grid gap-4 sm:grid-cols-3">
@@ -118,15 +124,28 @@ export default async function FitbitPage() {
         <section className="rounded-3xl border border-sky-100 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-slate-900">Actions</h2>
           <p className="mt-1 text-sm text-slate-600">
-            Authorize Fitbit and run workout sync jobs.
+            {connected
+              ? "Auto-sync runs daily at 7:00am. We refresh only when data is stale."
+              : "Authorize Fitbit to connect your account and enable daily sync."}
           </p>
           <div className="mt-4 flex flex-wrap gap-3">
-            <Link
-              href="/api/fitbit/auth"
-              className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-sky-700"
-            >
-              Connect Fitbit
-            </Link>
+            {connected ? (
+              <form action="/api/fitbit/disconnect" method="post">
+                <button
+                  type="submit"
+                  className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-sky-700"
+                >
+                  Disconnect Fitbit
+                </button>
+              </form>
+            ) : (
+              <Link
+                href="/api/fitbit/auth"
+                className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-sky-700"
+              >
+                Connect Fitbit
+              </Link>
+            )}
           </div>
           {showDevSyncButton ? (
             <DevSyncButton cronSecret={process.env.CRON_SECRET!} />
