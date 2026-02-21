@@ -1,8 +1,5 @@
-// src/app/api/fitbit/sync/route.ts
-import { NextResponse } from "next/server";
+import { POST as manualSyncPost } from "@/app/api/fitbit/manual-sync/route";
 
-export async function GET(req: Request) {
-  const url = new URL(req.url);
-  url.pathname = "/api/fitbit/manual-sync";
-  return NextResponse.redirect(url);
+export async function POST() {
+  return manualSyncPost();
 }
