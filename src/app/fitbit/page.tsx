@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { DevSyncButton } from "@/components/dev-sync-button";
+import { FitbitSyncNowButton } from "@/components/fitbit-sync-now-button";
 import { FITBIT_USER_ID } from "@/lib/fitbit";
 import { runDailyAutoSyncIfNeeded } from "@/lib/fitbitSync";
 import { getUtcStartOfDayDaysAgo } from "@/lib/date";
@@ -134,14 +135,17 @@ export default async function FitbitPage() {
           </p>
           <div className="mt-4 flex flex-wrap gap-3">
             {connected ? (
-              <form action="/api/fitbit/disconnect" method="post">
-                <button
-                  type="submit"
-                  className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-sky-700"
-                >
-                  Disconnect Fitbit
-                </button>
-              </form>
+              <>
+                <FitbitSyncNowButton />
+                <form action="/api/fitbit/disconnect" method="post">
+                  <button
+                    type="submit"
+                    className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-sky-700"
+                  >
+                    Disconnect Fitbit
+                  </button>
+                </form>
+              </>
             ) : (
               <Link
                 href="/api/fitbit/auth"

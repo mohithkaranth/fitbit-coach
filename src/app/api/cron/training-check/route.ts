@@ -46,7 +46,7 @@ export async function GET(request: Request) {
   const now = new Date();
   const dayKey = getSingaporeDayKey(now);
 
-  const [lastStrengthLikeWorkout, lastCardioWorkout] = await Promise.all([
+  const [lastStrengthLikeWorkout, lastCardioWorkout, latestQualifyingWorkout] = await Promise.all([
     prisma.fitbitWorkout.findFirst({
       where: {
         category: {
@@ -75,6 +75,19 @@ export async function GET(request: Request) {
         startTime: true,
       },
     }),
+    prisma.fitbitWorkout.findFirst({
+      where: {
+        category: {
+          in: ["strength", "bootcamp", "cardio"],
+        },
+      },
+      orderBy: {
+        startTime: "desc",
+      },
+      select: {
+        startTime: true,
+      },
+    }),
   ]);
 
   const strengthGapDays = getGapDays(now, lastStrengthLikeWorkout?.startTime ?? null);
@@ -83,10 +96,34 @@ export async function GET(request: Request) {
   const shouldTriggerStrength = !lastStrengthLikeWorkout || strengthGapDays >= 3;
   const shouldTriggerCardio = !lastCardioWorkout || cardioGapDays >= 2;
 
+  let resolvedReminderCount = 0;
+
+  if (latestQualifyingWorkout) {
+    const resolved = await prisma.reminder.updateMany({
+      where: {
+        subjectKey: SUBJECT_KEY,
+        kind: KIND,
+        status: "pending",
+        createdAt: {
+          lte: latestQualifyingWorkout.startTime,
+        },
+      },
+      data: {
+        status: "resolved",
+      },
+    });
+
+    resolvedReminderCount = resolved.count;
+  }
+
   if (!shouldTriggerStrength && !shouldTriggerCardio) {
     console.info("[training-check] Skipping reminder: latest strength/cardio is recent enough", {
+      lastStrengthAt: lastStrengthLikeWorkout?.startTime.toISOString() ?? null,
+      lastCardioAt: lastCardioWorkout?.startTime.toISOString() ?? null,
       strengthGapDays,
       cardioGapDays,
+      createdReminder: false,
+      resolvedReminderCount,
     });
 
     return NextResponse.json({
@@ -118,6 +155,12 @@ export async function GET(request: Request) {
     console.info("[training-check] Skipping reminder: already created for day", {
       dayKey,
       reminderId: existing.id,
+      lastStrengthAt: lastStrengthLikeWorkout?.startTime.toISOString() ?? null,
+      lastCardioAt: lastCardioWorkout?.startTime.toISOString() ?? null,
+      strengthGapDays,
+      cardioGapDays,
+      createdReminder: false,
+      resolvedReminderCount,
     });
 
     return NextResponse.json({
@@ -170,8 +213,12 @@ export async function GET(request: Request) {
 
   console.info("[training-check] Created reminder: strength/cardio gap threshold reached", {
     reminderId: reminder.id,
+    lastStrengthAt: lastStrengthLikeWorkout?.startTime.toISOString() ?? null,
+    lastCardioAt: lastCardioWorkout?.startTime.toISOString() ?? null,
     strengthGapDays,
     cardioGapDays,
+    createdReminder: true,
+    resolvedReminderCount,
   });
 
   return NextResponse.json({
