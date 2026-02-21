@@ -11,6 +11,12 @@ import { getAuth, touchAuth, upsertAuth, upsertWorkout } from "@/lib/store";
 export const runtime = "nodejs";
 
 function isAuthorized(request: Request) {
+  // Allow Vercel Cron (it always sends this header)
+  if (request.headers.get("x-vercel-cron") === "1") {
+    return true;
+  }
+
+  // Otherwise require secret for manual hits
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret) {
     return false;
@@ -27,7 +33,7 @@ function isAuthorized(request: Request) {
   }
 
   const [scheme, token] = authHeader.split(" ");
-  return scheme.toLowerCase() === "bearer" && token === cronSecret;
+  return scheme?.toLowerCase() === "bearer" && token === cronSecret;
 }
 
 // Vercel cron requests include this header.
