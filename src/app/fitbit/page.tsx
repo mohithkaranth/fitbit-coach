@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { DevSyncButton } from "@/components/dev-sync-button";
 import { FITBIT_USER_ID } from "@/lib/fitbit";
-import { prisma } from "@/lib/prisma";
+import { runDailyAutoSyncIfNeeded } from "@/lib/fitbitSync";
 import {
   getAuth,
   getLatestWorkoutCreatedAt,
@@ -12,27 +12,23 @@ import {
 } from "@/lib/store";
 
 export default async function FitbitPage() {
-  const [auth, workoutCount, workoutCategoryCounts, latestWorkout, syncState] =
+  await runDailyAutoSyncIfNeeded();
+
+  const [auth, workoutCount, workoutCategoryCounts, latestWorkout] =
     await Promise.all([
       getAuth(),
       getWorkoutCount(FITBIT_USER_ID),
       getWorkoutCategoryCounts(FITBIT_USER_ID),
       getLatestWorkoutCreatedAt(FITBIT_USER_ID),
-      prisma.fitbitSyncState.findUnique({
-        where: { userId: FITBIT_USER_ID },
-      }),
     ]);
 
   const connected = Boolean(auth);
-
-  // ✅ Correct source of truth: actual sync completion time
-  const lastSync = syncState?.lastSyncedAt ?? null;
+  const lastSync = auth?.lastSyncedAt ? new Date(auth.lastSyncedAt) : null;
 
   // (Optional: keep this around if you later want to show "Last Workout")
   // const lastWorkout = latestWorkout ?? null;
 
-  const showDevSyncButton =
-    process.env.NODE_ENV === "development" && Boolean(process.env.CRON_SECRET);
+  const showDevSyncButton = process.env.NODE_ENV === "development";
 
   const formatter = new Intl.DateTimeFormat("en-SG", {
     dateStyle: "medium",
@@ -125,7 +121,7 @@ export default async function FitbitPage() {
           <h2 className="text-lg font-semibold text-slate-900">Actions</h2>
           <p className="mt-1 text-sm text-slate-600">
             {connected
-              ? "Auto-sync runs multiple times daily."
+              ? "Auto-sync runs when you first access Fitbit each day."
               : "Authorize Fitbit to connect your account and enable daily sync."}
           </p>
           <div className="mt-4 flex flex-wrap gap-3">
@@ -147,9 +143,7 @@ export default async function FitbitPage() {
               </Link>
             )}
           </div>
-          {showDevSyncButton ? (
-            <DevSyncButton cronSecret={process.env.CRON_SECRET!} />
-          ) : null}
+          {showDevSyncButton ? <DevSyncButton /> : null}
         </section>
       </div>
     </div>

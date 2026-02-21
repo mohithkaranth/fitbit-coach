@@ -2,11 +2,7 @@
 
 import { useState } from "react";
 
-type DevSyncButtonProps = {
-  cronSecret: string;
-};
-
-export function DevSyncButton({ cronSecret }: DevSyncButtonProps) {
+export function DevSyncButton() {
   const [status, setStatus] = useState<string>("");
   const [loading, setLoading] = useState(false);
 
@@ -15,11 +11,8 @@ export function DevSyncButton({ cronSecret }: DevSyncButtonProps) {
     setStatus("");
 
     try {
-      const response = await fetch("/api/fitbit/sync", {
+      const response = await fetch("/api/fitbit/manual-sync", {
         method: "POST",
-        headers: {
-          "x-cron-secret": cronSecret,
-        },
       });
 
       const data = (await response.json()) as { syncedWorkouts?: number; error?: string };
