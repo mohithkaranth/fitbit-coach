@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import {
   computeExpiryDate,
   FITBIT_USER_ID,
@@ -6,40 +5,14 @@ import {
   refreshFitbitToken,
 } from "@/lib/fitbit";
 import { classifyWorkout } from "@/lib/classifyWorkout";
-import { getAuth, touchAuth, upsertAuth, upsertWorkout } from "@/lib/store";
-
-export const runtime = "nodejs";
-
-function isAuthorized(request: Request) {
-  // Allow Vercel Cron (it always sends this header)
-  if (request.headers.get("x-vercel-cron") === "1") {
-    return true;
-  }
-
-  // Otherwise require secret for manual hits
-  const cronSecret = process.env.CRON_SECRET;
-  if (!cronSecret) {
-    return false;
-  }
-
-  const headerSecret = request.headers.get("x-cron-secret");
-  if (headerSecret && headerSecret === cronSecret) {
-    return true;
-  }
-
-  const authHeader = request.headers.get("authorization");
-  if (!authHeader) {
-    return false;
-  }
-
-  const [scheme, token] = authHeader.split(" ");
-  return scheme?.toLowerCase() === "bearer" && token === cronSecret;
-}
-
-// Vercel cron requests include this header.
-function isVercelCron(request: Request) {
-  return request.headers.get("x-vercel-cron") === "1";
-}
+import {
+  createSyncRun,
+  getAuth,
+  markAuthSynced,
+  upsertAuth,
+  upsertWorkout,
+} from "@/lib/store";
+import { getStartOfSingaporeDay } from "@/lib/time";
 
 async function ensureValidAccessToken() {
   const auth = await getAuth();
@@ -116,7 +89,7 @@ async function syncActivities(accessToken: string) {
 
     if (!page.body) {
       throw new Error(
-        `Failed to fetch Fitbit activities with status ${page.status}`
+        `Failed to fetch Fitbit activities with status ${page.status}`,
       );
     }
 
@@ -163,60 +136,47 @@ async function syncActivities(accessToken: string) {
   return { unauthorized: false as const, synced };
 }
 
-async function handleSync(request: Request) {
-  const cron = isVercelCron(request);
+export async function runFitbitSync() {
+  let auth = await ensureValidAccessToken();
+  let result = await syncActivities(auth.accessToken);
 
-  console.log("[fitbit/sync] HIT", {
-    isCron: cron,
-    utc: new Date().toISOString(),
-  });
+  if (result.unauthorized) {
+    const refreshed = await refreshFitbitToken(auth.refreshToken);
+    auth = await upsertAuth({
+      userId: FITBIT_USER_ID,
+      fitbitUserId: refreshed.user_id,
+      scope: refreshed.scope,
+      accessToken: refreshed.access_token,
+      refreshToken: refreshed.refresh_token,
+      expiresAt: computeExpiryDate(refreshed.expires_in),
+    });
 
-  // IMPORTANT:
-  // - Cron will call via GET (and will include x-vercel-cron: 1)
-  // - We still require your CRON_SECRET (either x-cron-secret OR Bearer token) to prevent public abuse
-  if (!isAuthorized(request)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  try {
-    let auth = await ensureValidAccessToken();
-    let result = await syncActivities(auth.accessToken);
-
+    result = await syncActivities(auth.accessToken);
     if (result.unauthorized) {
-      const refreshed = await refreshFitbitToken(auth.refreshToken);
-      auth = await upsertAuth({
-        userId: FITBIT_USER_ID,
-        fitbitUserId: refreshed.user_id,
-        scope: refreshed.scope,
-        accessToken: refreshed.access_token,
-        refreshToken: refreshed.refresh_token,
-        expiresAt: computeExpiryDate(refreshed.expires_in),
-      });
-
-      result = await syncActivities(auth.accessToken);
-      if (result.unauthorized) {
-        return NextResponse.json(
-          { error: "Fitbit unauthorized after retry" },
-          { status: 502 }
-        );
-      }
+      throw new Error("Fitbit unauthorized after retry");
     }
-
-    await touchAuth();
-
-    console.log(`Fitbit sync complete. Workouts synced: ${result.synced}`);
-
-    return NextResponse.json({ ok: true, syncedWorkouts: result.synced });
-  } catch (error) {
-    console.error("Fitbit sync failed", error);
-    return NextResponse.json({ error: "Sync failed" }, { status: 500 });
   }
+
+  const now = new Date();
+  await markAuthSynced(now);
+  await createSyncRun({ userId: FITBIT_USER_ID, ranAt: now });
+
+  return { synced: result.synced, ranAt: now };
 }
 
-export async function GET(request: Request) {
-  return handleSync(request);
-}
+export async function runDailyAutoSyncIfNeeded() {
+  const auth = await getAuth();
+  if (!auth) {
+    return { ran: false as const };
+  }
 
-export async function POST(request: Request) {
-  return handleSync(request);
+  const startOfTodaySgt = getStartOfSingaporeDay(new Date());
+  const lastSyncedAt = auth.lastSyncedAt ? new Date(auth.lastSyncedAt) : null;
+
+  if (lastSyncedAt && lastSyncedAt >= startOfTodaySgt) {
+    return { ran: false as const };
+  }
+
+  const result = await runFitbitSync();
+  return { ran: true as const, synced: result.synced };
 }

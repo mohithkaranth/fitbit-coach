@@ -9,6 +9,7 @@ export type StoredFitbitAuth = {
   accessToken: string;
   refreshToken: string;
   expiresAt: string;
+  lastSyncedAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -35,6 +36,7 @@ function mapAuth(auth: {
   accessToken: string;
   refreshToken: string;
   expiresAt: Date;
+  lastSyncedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }): StoredFitbitAuth {
@@ -45,6 +47,7 @@ function mapAuth(auth: {
     accessToken: auth.accessToken,
     refreshToken: auth.refreshToken,
     expiresAt: auth.expiresAt.toISOString(),
+    lastSyncedAt: auth.lastSyncedAt?.toISOString() ?? null,
     createdAt: auth.createdAt.toISOString(),
     updatedAt: auth.updatedAt.toISOString(),
   };
@@ -88,7 +91,7 @@ export async function upsertAuth(input: {
   return mapAuth(auth);
 }
 
-export async function touchAuth() {
+export async function markAuthSynced(at: Date) {
   const auth = await prisma.fitbitAuth.findUnique({
     where: { userId: "me" },
   });
@@ -100,7 +103,7 @@ export async function touchAuth() {
   const updated = await prisma.fitbitAuth.update({
     where: { userId: "me" },
     data: {
-      accessToken: auth.accessToken,
+      lastSyncedAt: at,
     },
   });
 
@@ -141,6 +144,31 @@ export async function upsertWorkout(input: StoredWorkout) {
   });
 }
 
+export async function createSyncRun(input: { userId: string; ranAt: Date }) {
+  return prisma.syncRun.create({
+    data: {
+      userId: input.userId,
+      ranAt: input.ranAt,
+    },
+  });
+}
+
+export async function getSyncRunCountInRange(input: {
+  userId: string;
+  from: Date;
+  to: Date;
+}) {
+  return prisma.syncRun.count({
+    where: {
+      userId: input.userId,
+      ranAt: {
+        gte: input.from,
+        lt: input.to,
+      },
+    },
+  });
+}
+
 export async function getWorkoutCount(userId: string) {
   return prisma.fitbitWorkout.count({
     where: { userId },
@@ -164,7 +192,12 @@ export async function getWorkoutCategoryCounts(userId: string): Promise<
   };
 
   for (const item of grouped) {
-    if (item.category === "strength" || item.category === "cardio" || item.category === "walk" || item.category === "other") {
+    if (
+      item.category === "strength" ||
+      item.category === "cardio" ||
+      item.category === "walk" ||
+      item.category === "other"
+    ) {
       counts[item.category] = item._count._all;
     }
   }
