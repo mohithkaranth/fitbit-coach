@@ -63,6 +63,19 @@ function mapAuth(auth: {
   };
 }
 
+function isWorkoutCategory(value: unknown): value is WorkoutCategory {
+  return (
+    value === "strength" ||
+    value === "cardio" ||
+    value === "walk" ||
+    value === "other"
+  );
+}
+
+function normalizeWorkoutCategory(value: unknown): WorkoutCategory {
+  return isWorkoutCategory(value) ? value : "other";
+}
+
 export async function getAuth() {
   const auth = await prisma.fitbitAuth.findUnique({
     where: { userId: "me" },
@@ -196,8 +209,11 @@ export async function getWorkoutCountSince(userId: string, from: Date) {
   });
 }
 
-export async function getWorkoutsSince(userId: string, from: Date): Promise<FitbitWorkoutLedgerRow[]> {
-  return prisma.fitbitWorkout.findMany({
+export async function getWorkoutsSince(
+  userId: string,
+  from: Date
+): Promise<FitbitWorkoutLedgerRow[]> {
+  const rows = await prisma.fitbitWorkout.findMany({
     where: {
       userId,
       startTime: {
@@ -212,16 +228,22 @@ export async function getWorkoutsSince(userId: string, from: Date): Promise<Fitb
       fitbitLogId: true,
       startTime: true,
       activityName: true,
-      category: true,
+      category: true, // may be string | null depending on schema
       durationMs: true,
       calories: true,
     },
   });
+
+  // Normalize category to a strict WorkoutCategory so TS + downstream logic never sees null/garbage.
+  return rows.map((r) => ({
+    ...r,
+    category: normalizeWorkoutCategory(r.category),
+  }));
 }
 
-export async function getWorkoutCategoryCounts(userId: string): Promise<
-  Record<WorkoutCategory, number>
-> {
+export async function getWorkoutCategoryCounts(
+  userId: string
+): Promise<Record<WorkoutCategory, number>> {
   const grouped = await prisma.fitbitWorkout.groupBy({
     by: ["category"],
     where: { userId },
