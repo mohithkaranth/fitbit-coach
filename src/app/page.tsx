@@ -34,7 +34,7 @@ export default async function Home() {
           <section className="mt-6 rounded-3xl border border-cyan-100 bg-white p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-slate-900">Training gap reminder</h2>
             <p className="mt-2 text-slate-600">
-              {pendingReminder.message ?? "You have not done strength or cardio in the last 48 hours."}
+              {pendingReminder.message ?? "Your strength or cardio cadence may be slipping. Let's get a quick session in today."}
             </p>
             <div className="mt-4 flex gap-3">
               <Link

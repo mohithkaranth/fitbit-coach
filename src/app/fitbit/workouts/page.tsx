@@ -3,7 +3,8 @@ export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { FitbitWorkoutLedger } from "@/components/fitbit-workout-ledger";
 import { FITBIT_USER_ID } from "@/lib/fitbit";
-import { getWorkoutsSince } from "@/lib/store";
+import { getUtcStartOfDayDaysAgo } from "@/lib/date";
+import { getWorkoutCountSince, getWorkoutsSince } from "@/lib/store";
 
 export default async function FitbitWorkoutsPage({
   searchParams,
@@ -15,8 +16,11 @@ export default async function FitbitWorkoutsPage({
   const rangeValue = Array.isArray(range) ? range[0] : range;
 
   const days = rangeValue === "30d" ? 30 : 30;
-  const from = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-  const workouts = await getWorkoutsSince(FITBIT_USER_ID, from);
+  const from30 = getUtcStartOfDayDaysAgo(days);
+  const [workoutCount30, workouts] = await Promise.all([
+    getWorkoutCountSince(FITBIT_USER_ID, from30),
+    getWorkoutsSince(FITBIT_USER_ID, from30),
+  ]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-sky-50 via-white to-rose-50 px-6 py-12">
@@ -26,7 +30,10 @@ export default async function FitbitWorkoutsPage({
             Fitbit Integration
           </p>
           <h1 className="text-3xl font-semibold text-slate-900">Workout Ledger (30 days)</h1>
-          <p className="text-slate-600">Detailed workout history for the last 30 days.</p>
+          <p className="text-slate-600">Detailed workout history for the last 30 days (UTC start-of-day).</p>
+          <p className="text-sm font-medium text-slate-700">
+            Workouts (last 30 days): <span className="font-semibold text-slate-900">{workoutCount30}</span>
+          </p>
           <Link
             href="/fitbit"
             className="inline-flex text-sm font-medium text-sky-700 transition hover:text-sky-800"

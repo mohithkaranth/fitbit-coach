@@ -4,6 +4,7 @@ import Link from "next/link";
 import { DevSyncButton } from "@/components/dev-sync-button";
 import { FITBIT_USER_ID } from "@/lib/fitbit";
 import { runDailyAutoSyncIfNeeded } from "@/lib/fitbitSync";
+import { getUtcStartOfDayDaysAgo } from "@/lib/date";
 import {
   getAuth,
   getLatestWorkoutCreatedAt,
@@ -14,13 +15,13 @@ import {
 export default async function FitbitPage() {
   await runDailyAutoSyncIfNeeded();
 
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const from30 = getUtcStartOfDayDaysAgo(30);
 
   const [auth, workoutCount, workoutCategoryCounts, latestWorkout] =
     await Promise.all([
       getAuth(),
-      getWorkoutCountSince(FITBIT_USER_ID, thirtyDaysAgo),
-      getWorkoutCategoryCounts(FITBIT_USER_ID),
+      getWorkoutCountSince(FITBIT_USER_ID, from30),
+      getWorkoutCategoryCounts(FITBIT_USER_ID, from30),
       getLatestWorkoutCreatedAt(FITBIT_USER_ID),
     ]);
 
@@ -94,7 +95,7 @@ export default async function FitbitPage() {
 
         <section className="rounded-3xl border border-sky-100 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-slate-900">
-            Workout categories
+            Workout categories (last 30 days)
           </h2>
           <div className="mt-3 grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
             <p>

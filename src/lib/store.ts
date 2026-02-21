@@ -242,11 +242,21 @@ export async function getWorkoutsSince(
 }
 
 export async function getWorkoutCategoryCounts(
-  userId: string
+  userId: string,
+  from?: Date
 ): Promise<Record<WorkoutCategory, number>> {
   const grouped = await prisma.fitbitWorkout.groupBy({
     by: ["category"],
-    where: { userId },
+    where: {
+      userId,
+      ...(from
+        ? {
+            startTime: {
+              gte: from,
+            },
+          }
+        : {}),
+    },
     _count: { _all: true },
   });
 
