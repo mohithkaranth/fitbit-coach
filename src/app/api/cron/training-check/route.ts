@@ -8,13 +8,11 @@ const SUBJECT_KEY = "owner";
 const KIND = "training_gap";
 
 function isAuthorized(request: Request) {
-  // Allow Vercel Cron
   const vercelCron = request.headers.get("x-vercel-cron");
   if (vercelCron === "1") {
     return true;
   }
 
-  // Allow manual/dev triggers
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret) return false;
 
@@ -34,6 +32,12 @@ function getSingaporeDayKey(date: Date) {
   }).format(date);
 }
 
+function getGapDays(now: Date, at: Date | null) {
+  if (!at) return Number.POSITIVE_INFINITY;
+
+  return (now.getTime() - at.getTime()) / (1000 * 60 * 60 * 24);
+}
+
 export async function GET(request: Request) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -41,71 +45,59 @@ export async function GET(request: Request) {
 
   const now = new Date();
   const dayKey = getSingaporeDayKey(now);
-  const windowStart = new Date(now.getTime() - 48 * 60 * 60 * 1000);
 
-  const [lastWorkout, anyWorkoutInWindowCount, strengthWorkoutInWindowCount] =
-    await Promise.all([
-      prisma.fitbitWorkout.findFirst({
-        where: {
-          category: {
-            in: ["strength", "cardio"],
-          },
+  const [lastStrengthLikeWorkout, lastCardioWorkout] = await Promise.all([
+    prisma.fitbitWorkout.findFirst({
+      where: {
+        category: {
+          in: ["strength", "bootcamp"],
         },
-        orderBy: {
-          startTime: "desc",
-        },
-        select: {
-          activityName: true,
-          category: true,
-          startTime: true,
-        },
-      }),
-      prisma.fitbitWorkout.count({
-        where: {
-          startTime: {
-            gte: windowStart,
-          },
-          OR: [
-            { isTraining: true },
-            {
-              category: {
-                in: ["cardio", "strength"],
-              },
-            },
-          ],
-        },
-      }),
-      prisma.fitbitWorkout.count({
-        where: {
-          startTime: {
-            gte: windowStart,
-          },
-          category: "strength",
-        },
-      }),
-    ]);
+      },
+      orderBy: {
+        startTime: "desc",
+      },
+      select: {
+        activityName: true,
+        category: true,
+        startTime: true,
+      },
+    }),
+    prisma.fitbitWorkout.findFirst({
+      where: {
+        category: "cardio",
+      },
+      orderBy: {
+        startTime: "desc",
+      },
+      select: {
+        activityName: true,
+        category: true,
+        startTime: true,
+      },
+    }),
+  ]);
 
-  const anyWorkoutInWindow = anyWorkoutInWindowCount > 0;
-  const strengthWorkoutInWindow = strengthWorkoutInWindowCount > 0;
+  const strengthGapDays = getGapDays(now, lastStrengthLikeWorkout?.startTime ?? null);
+  const cardioGapDays = getGapDays(now, lastCardioWorkout?.startTime ?? null);
 
-  const hoursSinceLast = lastWorkout
-    ? (now.getTime() - lastWorkout.startTime.getTime()) / (1000 * 60 * 60)
-    : Number.POSITIVE_INFINITY;
+  const shouldTriggerStrength = !lastStrengthLikeWorkout || strengthGapDays >= 3;
+  const shouldTriggerCardio = !lastCardioWorkout || cardioGapDays >= 2;
 
-  if (anyWorkoutInWindow) {
-    console.info("[training-check] Skipping reminder: workout found in 48h window", {
-      anyWorkoutInWindow,
-      strengthWorkoutInWindow,
+  if (!shouldTriggerStrength && !shouldTriggerCardio) {
+    console.info("[training-check] Skipping reminder: latest strength/cardio is recent enough", {
+      strengthGapDays,
+      cardioGapDays,
     });
 
     return NextResponse.json({
       ok: true,
       created: false,
-      reason: "recent_training_exists",
+      reason: "strength_and_cardio_recent_enough",
       dayKey,
-      anyWorkoutInWindow,
-      strengthWorkoutInWindow,
-      hoursSinceLast,
+      lastStrengthAt: lastStrengthLikeWorkout?.startTime.toISOString() ?? null,
+      lastCardioAt: lastCardioWorkout?.startTime.toISOString() ?? null,
+      strengthGapDays,
+      cardioGapDays,
     });
   }
 
@@ -134,8 +126,10 @@ export async function GET(request: Request) {
       reason: "already_created_for_day",
       reminderId: existing.id,
       dayKey,
-      anyWorkoutInWindow,
-      strengthWorkoutInWindow,
+      lastStrengthAt: lastStrengthLikeWorkout?.startTime.toISOString() ?? null,
+      lastCardioAt: lastCardioWorkout?.startTime.toISOString() ?? null,
+      strengthGapDays,
+      cardioGapDays,
     });
   }
 
@@ -144,20 +138,29 @@ export async function GET(request: Request) {
       subjectKey: SUBJECT_KEY,
       kind: KIND,
       status: "pending",
-      reason: "no_strength_or_cardio_48h",
+      reason: "strength_or_cardio_gap",
       dayKey,
     },
   });
 
+  const mostRecentWorkout =
+    !lastCardioWorkout ||
+    (lastStrengthLikeWorkout &&
+      lastStrengthLikeWorkout.startTime.getTime() >= lastCardioWorkout.startTime.getTime())
+      ? lastStrengthLikeWorkout
+      : lastCardioWorkout;
+
   const message = await generateTrainingReminder({
-    lastWorkout: lastWorkout
+    lastWorkout: mostRecentWorkout
       ? {
-          name: lastWorkout.activityName,
-          Category: lastWorkout.category ?? "other",
-          startTime: lastWorkout.startTime,
+          name: mostRecentWorkout.activityName,
+          Category: mostRecentWorkout.category ?? "other",
+          startTime: mostRecentWorkout.startTime,
         }
       : null,
-    hoursSinceLast,
+    hoursSinceLast: mostRecentWorkout
+      ? (now.getTime() - mostRecentWorkout.startTime.getTime()) / (1000 * 60 * 60)
+      : Number.POSITIVE_INFINITY,
   });
 
   await prisma.reminder.update({
@@ -165,10 +168,10 @@ export async function GET(request: Request) {
     data: { message },
   });
 
-  console.info("[training-check] Created reminder: no workout in 48h window", {
+  console.info("[training-check] Created reminder: strength/cardio gap threshold reached", {
     reminderId: reminder.id,
-    anyWorkoutInWindow,
-    strengthWorkoutInWindow,
+    strengthGapDays,
+    cardioGapDays,
   });
 
   return NextResponse.json({
@@ -176,7 +179,9 @@ export async function GET(request: Request) {
     created: true,
     reminderId: reminder.id,
     dayKey,
-    anyWorkoutInWindow,
-    strengthWorkoutInWindow,
+    lastStrengthAt: lastStrengthLikeWorkout?.startTime.toISOString() ?? null,
+    lastCardioAt: lastCardioWorkout?.startTime.toISOString() ?? null,
+    strengthGapDays,
+    cardioGapDays,
   });
 }
