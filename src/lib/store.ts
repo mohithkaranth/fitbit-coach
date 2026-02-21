@@ -29,6 +29,16 @@ export type StoredWorkout = {
   createdAt: string;
 };
 
+export type FitbitWorkoutLedgerRow = {
+  id: string;
+  fitbitLogId: string;
+  startTime: Date;
+  activityName: string;
+  category: WorkoutCategory;
+  durationMs: number;
+  calories: number | null;
+};
+
 function mapAuth(auth: {
   userId: string;
   fitbitUserId: string;
@@ -51,6 +61,19 @@ function mapAuth(auth: {
     createdAt: auth.createdAt.toISOString(),
     updatedAt: auth.updatedAt.toISOString(),
   };
+}
+
+function isWorkoutCategory(value: unknown): value is WorkoutCategory {
+  return (
+    value === "strength" ||
+    value === "cardio" ||
+    value === "walk" ||
+    value === "other"
+  );
+}
+
+function normalizeWorkoutCategory(value: unknown): WorkoutCategory {
+  return isWorkoutCategory(value) ? value : "other";
 }
 
 export async function getAuth() {
@@ -175,9 +198,52 @@ export async function getWorkoutCount(userId: string) {
   });
 }
 
-export async function getWorkoutCategoryCounts(userId: string): Promise<
-  Record<WorkoutCategory, number>
-> {
+export async function getWorkoutCountSince(userId: string, from: Date) {
+  return prisma.fitbitWorkout.count({
+    where: {
+      userId,
+      startTime: {
+        gte: from,
+      },
+    },
+  });
+}
+
+export async function getWorkoutsSince(
+  userId: string,
+  from: Date
+): Promise<FitbitWorkoutLedgerRow[]> {
+  const rows = await prisma.fitbitWorkout.findMany({
+    where: {
+      userId,
+      startTime: {
+        gte: from,
+      },
+    },
+    orderBy: {
+      startTime: "desc",
+    },
+    select: {
+      id: true,
+      fitbitLogId: true,
+      startTime: true,
+      activityName: true,
+      category: true, // may be string | null depending on schema
+      durationMs: true,
+      calories: true,
+    },
+  });
+
+  // Normalize category to a strict WorkoutCategory so TS + downstream logic never sees null/garbage.
+  return rows.map((r) => ({
+    ...r,
+    category: normalizeWorkoutCategory(r.category),
+  }));
+}
+
+export async function getWorkoutCategoryCounts(
+  userId: string
+): Promise<Record<WorkoutCategory, number>> {
   const grouped = await prisma.fitbitWorkout.groupBy({
     by: ["category"],
     where: { userId },
