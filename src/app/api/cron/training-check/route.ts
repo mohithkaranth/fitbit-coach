@@ -41,34 +41,70 @@ export async function GET(request: Request) {
 
   const now = new Date();
   const dayKey = getSingaporeDayKey(now);
+  const windowStart = new Date(now.getTime() - 48 * 60 * 60 * 1000);
 
-  const lastWorkout = await prisma.fitbitWorkout.findFirst({
-    where: {
-      category: {
-        in: ["strength", "cardio"],
-      },
-    },
-    orderBy: {
-      startTime: "desc",
-    },
-    select: {
-      activityName: true,
-      category: true,
-      startTime: true,
-    },
-  });
+  const [lastWorkout, anyWorkoutInWindowCount, strengthWorkoutInWindowCount] =
+    await Promise.all([
+      prisma.fitbitWorkout.findFirst({
+        where: {
+          category: {
+            in: ["strength", "cardio"],
+          },
+        },
+        orderBy: {
+          startTime: "desc",
+        },
+        select: {
+          activityName: true,
+          category: true,
+          startTime: true,
+        },
+      }),
+      prisma.fitbitWorkout.count({
+        where: {
+          startTime: {
+            gte: windowStart,
+          },
+          OR: [
+            { isTraining: true },
+            {
+              category: {
+                in: ["cardio", "strength"],
+              },
+            },
+          ],
+        },
+      }),
+      prisma.fitbitWorkout.count({
+        where: {
+          startTime: {
+            gte: windowStart,
+          },
+          category: "strength",
+        },
+      }),
+    ]);
+
+  const anyWorkoutInWindow = anyWorkoutInWindowCount > 0;
+  const strengthWorkoutInWindow = strengthWorkoutInWindowCount > 0;
 
   const hoursSinceLast = lastWorkout
     ? (now.getTime() - lastWorkout.startTime.getTime()) / (1000 * 60 * 60)
     : Number.POSITIVE_INFINITY;
 
-  const eligible = !lastWorkout || hoursSinceLast >= 48;
-  if (!eligible) {
+  if (anyWorkoutInWindow) {
+    console.info("[training-check] Skipping reminder: workout found in 48h window", {
+      anyWorkoutInWindow,
+      strengthWorkoutInWindow,
+    });
+
     return NextResponse.json({
       ok: true,
       created: false,
       reason: "recent_training_exists",
       dayKey,
+      anyWorkoutInWindow,
+      strengthWorkoutInWindow,
       hoursSinceLast,
     });
   }
@@ -87,12 +123,19 @@ export async function GET(request: Request) {
   });
 
   if (existing) {
+    console.info("[training-check] Skipping reminder: already created for day", {
+      dayKey,
+      reminderId: existing.id,
+    });
+
     return NextResponse.json({
       ok: true,
       created: false,
       reason: "already_created_for_day",
       reminderId: existing.id,
       dayKey,
+      anyWorkoutInWindow,
+      strengthWorkoutInWindow,
     });
   }
 
@@ -122,10 +165,18 @@ export async function GET(request: Request) {
     data: { message },
   });
 
+  console.info("[training-check] Created reminder: no workout in 48h window", {
+    reminderId: reminder.id,
+    anyWorkoutInWindow,
+    strengthWorkoutInWindow,
+  });
+
   return NextResponse.json({
     ok: true,
     created: true,
     reminderId: reminder.id,
     dayKey,
+    anyWorkoutInWindow,
+    strengthWorkoutInWindow,
   });
 }

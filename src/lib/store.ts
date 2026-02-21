@@ -29,6 +29,16 @@ export type StoredWorkout = {
   createdAt: string;
 };
 
+export type FitbitWorkoutLedgerRow = {
+  id: string;
+  fitbitLogId: string;
+  startTime: Date;
+  activityName: string;
+  category: WorkoutCategory;
+  durationMs: number;
+  calories: number | null;
+};
+
 function mapAuth(auth: {
   userId: string;
   fitbitUserId: string;
@@ -172,6 +182,40 @@ export async function getSyncRunCountInRange(input: {
 export async function getWorkoutCount(userId: string) {
   return prisma.fitbitWorkout.count({
     where: { userId },
+  });
+}
+
+export async function getWorkoutCountSince(userId: string, from: Date) {
+  return prisma.fitbitWorkout.count({
+    where: {
+      userId,
+      startTime: {
+        gte: from,
+      },
+    },
+  });
+}
+
+export async function getWorkoutsSince(userId: string, from: Date): Promise<FitbitWorkoutLedgerRow[]> {
+  return prisma.fitbitWorkout.findMany({
+    where: {
+      userId,
+      startTime: {
+        gte: from,
+      },
+    },
+    orderBy: {
+      startTime: "desc",
+    },
+    select: {
+      id: true,
+      fitbitLogId: true,
+      startTime: true,
+      activityName: true,
+      category: true,
+      durationMs: true,
+      calories: true,
+    },
   });
 }
 

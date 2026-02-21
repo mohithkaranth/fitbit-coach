@@ -8,16 +8,18 @@ import {
   getAuth,
   getLatestWorkoutCreatedAt,
   getWorkoutCategoryCounts,
-  getWorkoutCount,
+  getWorkoutCountSince,
 } from "@/lib/store";
 
 export default async function FitbitPage() {
   await runDailyAutoSyncIfNeeded();
 
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
   const [auth, workoutCount, workoutCategoryCounts, latestWorkout] =
     await Promise.all([
       getAuth(),
-      getWorkoutCount(FITBIT_USER_ID),
+      getWorkoutCountSince(FITBIT_USER_ID, thirtyDaysAgo),
       getWorkoutCategoryCounts(FITBIT_USER_ID),
       getLatestWorkoutCreatedAt(FITBIT_USER_ID),
     ]);
@@ -71,9 +73,14 @@ export default async function FitbitPage() {
           </div>
 
           <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-sm">
-            <p className="text-sm text-slate-500">Workouts</p>
+            <p className="text-sm text-slate-500">Workouts (last 30 days)</p>
             <p className="mt-2 text-lg font-semibold text-slate-900">
-              {workoutCount}
+              <Link
+                href="/fitbit/workouts?range=30d"
+                className="text-slate-900 underline-offset-2 transition hover:underline"
+              >
+                {workoutCount}
+              </Link>
             </p>
           </div>
 
