@@ -8,15 +8,18 @@ const SUBJECT_KEY = "owner";
 const KIND = "training_gap";
 
 function isAuthorized(request: Request) {
-  const cronSecret = process.env.CRON_SECRET;
-  if (!cronSecret) {
-    return false;
+  // Allow Vercel Cron
+  const vercelCron = request.headers.get("x-vercel-cron");
+  if (vercelCron === "1") {
+    return true;
   }
 
+  // Allow manual/dev triggers
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) return false;
+
   const authHeader = request.headers.get("authorization");
-  if (!authHeader) {
-    return false;
-  }
+  if (!authHeader) return false;
 
   const [scheme, token] = authHeader.split(" ");
   return scheme.toLowerCase() === "bearer" && token === cronSecret;
