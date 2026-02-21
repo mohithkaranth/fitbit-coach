@@ -1,13 +1,45 @@
 {
   "crons": [
-    { "path": "/api/fitbit/sync", "schedule": "0 23 * * *" },
-    { "path": "/api/fitbit/sync", "schedule": "0 6 * * *" },
-    { "path": "/api/fitbit/sync", "schedule": "0 11 * * *" },
-    { "path": "/api/fitbit/sync", "schedule": "0 14 * * *" },
+    {
+      "path": "/api/fitbit/sync",
+      "schedule": "0 23 * * *",
+      "headers": { "x-cron-secret": "@cron_secret" }
+    },
+    {
+      "path": "/api/fitbit/sync",
+      "schedule": "0 6 * * *",
+      "headers": { "x-cron-secret": "@cron_secret" }
+    },
+    {
+      "path": "/api/fitbit/sync",
+      "schedule": "0 9 * * *",
+      "headers": { "x-cron-secret": "@cron_secret" }
+    },
+    {
+      "path": "/api/fitbit/sync",
+      "schedule": "0 13 * * *",
+      "headers": { "x-cron-secret": "@cron_secret" }
+    },
 
-    { "path": "/api/cron/training-check", "schedule": "0 23 * * *" },
-    { "path": "/api/cron/training-check", "schedule": "0 6 * * *" },
-    { "path": "/api/cron/training-check", "schedule": "0 11 * * *" },
-    { "path": "/api/cron/training-check", "schedule": "0 14 * * *" }
+    {
+      "path": "/api/cron/training-check",
+      "schedule": "0 23 * * *",
+      "headers": { "x-cron-secret": "@cron_secret" }
+    },
+    {
+      "path": "/api/cron/training-check",
+      "schedule": "0 6 * * *",
+      "headers": { "x-cron-secret": "@cron_secret" }
+    },
+    {
+      "path": "/api/cron/training-check",
+      "schedule": "0 9 * * *",
+      "headers": { "x-cron-secret": "@cron_secret" }
+    },
+    {
+      "path": "/api/cron/training-check",
+      "schedule": "0 13 * * *",
+      "headers": { "x-cron-secret": "@cron_secret" }
+    }
   ]
 }

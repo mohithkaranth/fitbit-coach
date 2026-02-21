@@ -30,6 +30,11 @@ function isAuthorized(request: Request) {
   return scheme.toLowerCase() === "bearer" && token === cronSecret;
 }
 
+// Vercel cron requests include this header.
+function isVercelCron(request: Request) {
+  return request.headers.get("x-vercel-cron") === "1";
+}
+
 async function ensureValidAccessToken() {
   const auth = await getAuth();
 
@@ -104,7 +109,9 @@ async function syncActivities(accessToken: string) {
     }
 
     if (!page.body) {
-      throw new Error(`Failed to fetch Fitbit activities with status ${page.status}`);
+      throw new Error(
+        `Failed to fetch Fitbit activities with status ${page.status}`
+      );
     }
 
     const activities = page.body.activities || [];
@@ -118,7 +125,8 @@ async function syncActivities(accessToken: string) {
       const duration = activity.duration;
       const activityName = activity.activityName;
 
-      const parsedActivityName = typeof activityName === "string" ? activityName : "Workout";
+      const parsedActivityName =
+        typeof activityName === "string" ? activityName : "Workout";
       const classification = classifyWorkout(parsedActivityName);
 
       await upsertWorkout({
@@ -149,7 +157,17 @@ async function syncActivities(accessToken: string) {
   return { unauthorized: false as const, synced };
 }
 
-export async function POST(request: Request) {
+async function handleSync(request: Request) {
+  const cron = isVercelCron(request);
+
+  console.log("[fitbit/sync] HIT", {
+    isCron: cron,
+    utc: new Date().toISOString(),
+  });
+
+  // IMPORTANT:
+  // - Cron will call via GET (and will include x-vercel-cron: 1)
+  // - We still require your CRON_SECRET (either x-cron-secret OR Bearer token) to prevent public abuse
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -171,7 +189,10 @@ export async function POST(request: Request) {
 
       result = await syncActivities(auth.accessToken);
       if (result.unauthorized) {
-        return NextResponse.json({ error: "Fitbit unauthorized after retry" }, { status: 502 });
+        return NextResponse.json(
+          { error: "Fitbit unauthorized after retry" },
+          { status: 502 }
+        );
       }
     }
 
@@ -184,4 +205,12 @@ export async function POST(request: Request) {
     console.error("Fitbit sync failed", error);
     return NextResponse.json({ error: "Sync failed" }, { status: 500 });
   }
+}
+
+export async function GET(request: Request) {
+  return handleSync(request);
+}
+
+export async function POST(request: Request) {
+  return handleSync(request);
 }
